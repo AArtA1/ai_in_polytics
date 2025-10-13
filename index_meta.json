@@ -1,0 +1,7 @@
+{
+  "collection": "spravedlivo_ru",
+  "embedding_model": "BAAI/bge-m3",
+  "num_docs": 1500,
+  "num_chunks": 1688,
+  "build_time_sec": 2123.7318437099457
+}
