@@ -13,3 +13,11 @@ data_spravedlivo/
 
 # Virtual environments
 .venv
+
+*.txt
+
+# Environment variables (содержит API ключи!)
+.env
+
+# Qdrant database
+qdrant_store/
