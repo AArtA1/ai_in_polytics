@@ -1,5 +1,9 @@
 import os
+import logging
 from typing import Optional, Dict, List
+
+# Настройка логирования
+logger = logging.getLogger(__name__)
 
 system_msg = """
 Тебе близки идеи партии «Справедливая Россия — За правду». 
@@ -158,7 +162,11 @@ def qdrant_query(qdrant, vector, collection: str, k: int):
 
 def retrieve(qdrant, emb_model, query: str, collection: str, k: int = 6) -> List[Dict]:
     """Поиск релевантных документов в Qdrant."""
+    logger.debug(f"🔍 Encoding query: '{query[:50]}...'")
     qv = emb_model.encode([query], normalize_embeddings=True).tolist()[0]
+    logger.debug(f"✅ Query encoded to vector of dimension {len(qv)}")
+    
+    logger.debug(f"📊 Querying Qdrant collection '{collection}' for top {k} results...")
     res = qdrant_query(qdrant, qv, collection, k)
 
     points = getattr(res, "points", None) or res  # search() возвращает список
@@ -173,17 +181,22 @@ def retrieve(qdrant, emb_model, query: str, collection: str, k: int = 6) -> List
             "source": payload.get("source", ""),
             "chunk": payload.get("chunk", ""),
         })
+    logger.debug(f"✅ Retrieved {len(hits)} hits from Qdrant")
     return hits
 
 
 def build_rag_context(hits: List[Dict]) -> str:
     """Форматирует результаты RAG в текстовый контекст."""
-    return "\n\n".join([f"[Источник {i+1}] {h['chunk']}" for i, h in enumerate(hits)])
+    logger.debug(f"📝 Building RAG context from {len(hits)} chunks...")
+    context = "\n\n".join([f"[Источник {i+1}] {h['chunk']}" for i, h in enumerate(hits)])
+    logger.debug(f"✅ RAG context built: {len(context)} characters")
+    return context
 
 
 # ===================== OpenAI Генератор =====================
 def call_openai(oa_client, system_msg: str, user_msg: str, model: str, temperature: float, expect_json: bool = True) -> str:
     """Вызов OpenAI API для генерации ответа."""
+    logger.debug(f"🤖 Preparing OpenAI request: model={model}, temperature={temperature}, expect_json={expect_json}")
     kwargs = dict(
         model=model,
         messages=[
@@ -195,5 +208,8 @@ def call_openai(oa_client, system_msg: str, user_msg: str, model: str, temperatu
     if expect_json:
         kwargs["response_format"] = {"type": "json_object"}
 
+    logger.debug("📡 Sending request to OpenAI API...")
     resp = oa_client.chat.completions.create(**kwargs)
-    return resp.choices[0].message.content
+    content = resp.choices[0].message.content
+    logger.debug(f"✅ OpenAI response received: {len(content)} characters")
+    return content

@@ -9,6 +9,51 @@
 uv sync
 ```
 
+## 🐳 Docker деплой
+
+### Сборка и запуск
+
+```bash
+# Сборка образа
+docker build -t ai-in-politics .
+
+# Запуск контейнера
+docker run -d \
+  --name ai-politics \
+  -p 8000:8000 \
+  -e OPENAI_API_KEY=your-api-key-here \
+  ai-in-politics
+
+# Просмотр логов (с детальной диагностикой)
+docker logs -f ai-politics
+
+# Остановка
+docker stop ai-politics
+
+# Удаление контейнера
+docker rm ai-politics
+```
+
+### Диагностика проблем
+
+Если контейнер зависает на "Waiting for application startup":
+- Проверьте логи: `docker logs -f <container_id>`
+- При первом запуске модель эмбеддингов (~2GB) кэшируется в образе, это занимает время
+- После сборки образа последующие запуски будут мгновенными
+
+Интерактивная отладка:
+```bash
+# Запуск bash в контейнере
+docker run -it --rm ai-in-politics bash
+
+# Проверка структуры
+ls -la /app
+ls -la /app/qdrant_store
+
+# Ручной запуск приложения
+uv run python -c "from src.app import app; print('Import OK')"
+```
+
 ## Настройка переменных окружения
 
 1. Скопируйте файл `env.example` в `.env`:
@@ -20,6 +65,7 @@ cp env.example .env
 ```bash
 OPENAI_API_KEY=sk-your-actual-api-key-here
 ```
+
 
 Получить ключ можно на https://platform.openai.com/api-keys
 

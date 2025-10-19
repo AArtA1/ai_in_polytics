@@ -4,14 +4,12 @@ FROM python:3.13-slim AS base
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    UV_LINK_MODE=copy \
-    PATH="/root/.local/bin:/app/.venv/bin:$PATH"
+    UV_LINK_MODE=copy 
 
 # Install uv
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl ca-certificates && \
-    rm -rf /var/lib/apt/lists/* && \
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -33,8 +31,10 @@ RUN uv sync --locked --no-dev
 # Copy application source
 COPY src ./src
 
-# Copy .env file (can be overridden by docker-compose or runtime env vars)
 COPY .env ./.env
+
+# Copy Qdrant database (needed for RAG retrieval)
+COPY qdrant_store ./qdrant_store
 
 EXPOSE 8000
 
