@@ -5,8 +5,9 @@ FastAPI сервис для генерации диалогов с исполь�
 """
 import os
 import json
-from typing import List, Dict, Literal, Optional
+from typing import Optional
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +18,9 @@ from src.generate_dialogue import (
     call_openai,
 )
 
+# Загрузка переменных окружения из .env файла
+load_dotenv()
+
 # ===================== Настройки =====================
 QDRANT_HOST = os.getenv("QDRANT_HOST", "127.0.0.1")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
@@ -25,9 +29,9 @@ COLLECTION   = os.getenv("QDRANT_COLLECTION", "spravedlivo_ru")
 EMB_MODEL    = os.getenv("EMB_MODEL", "BAAI/bge-m3")
 TOP_K        = int(os.getenv("TOP_K", "6"))
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # Получаем из .env файла
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 LLM_MODEL    = os.getenv("LLM_MODEL", "gpt-4o-mini")
-LLM_TEMP     = float(os.getenv("LLM_TEMP", "0.7"))
+LLM_TEMP     = float(os.getenv("LLM_TEMP", "1"))
 
 # ===================== FastAPI =====================
 app = FastAPI(title="RAG Dialogue API", version="1.0.0")
@@ -75,11 +79,8 @@ async def shutdown():
         pass
 
 # ---- Входные модели ----
-Mode = Literal["dialogue"]
-
 class GenerateRequest(BaseModel):
     message: str = Field(..., description="Описание темы/кейса/поста/диалога — свободный текст.")
-    mode: Mode = Field("dialogue", description="Что генерируем")
     top_k: int = Field(TOP_K, ge=1, le=20)
     # Параметры диалога
     turns: int = Field(6, ge=2, description="Чётное число ходов (A начинает)")
@@ -109,8 +110,8 @@ def retrieve_endpoint(req: GenerateRequest, request: Request):
     )
     return {"query": req.message, "results": hits}
 
-@app.post("/rag_generate")
-def rag_generate(req: GenerateRequest, request: Request):
+@app.post("/generate_dialogue")
+def generate_dialogue(req: GenerateRequest, request: Request):
     """Генерация диалога с использованием RAG."""
     qdrant = request.app.state.qdrant
     emb_model = request.app.state.emb_model
@@ -120,19 +121,15 @@ def rag_generate(req: GenerateRequest, request: Request):
     hits = retrieve(qdrant, emb_model, req.message, collection=COLLECTION, k=req.top_k)
     rag_ctx = build_rag_context(hits) if hits else "(нет подходящих отрывков)"
 
-    # 2) Построение промпта
-    if req.mode == "dialogue":
-        prompt = build_dialogue_prompt(
-            message=req.message,
-            rag_ctx=rag_ctx,
-            turns=req.turns,
-            chars_per_turn=req.chars_per_turn,
-            stance_A=req.stance_A,
-            stance_B=req.stance_B,
-        )
-        expect_json = True
-    else:
-        return {"error": f"Unknown mode: {req.mode}"}
+    # 2) Построение промпта для диалога
+    prompt = build_dialogue_prompt(
+        message=req.message,
+        rag_ctx=rag_ctx,
+        turns=req.turns,
+        chars_per_turn=req.chars_per_turn,
+        stance_A=req.stance_A,
+        stance_B=req.stance_B,
+    )
 
     # 3) Вызов LLM
     content = call_openai(
@@ -141,20 +138,16 @@ def rag_generate(req: GenerateRequest, request: Request):
         prompt["user"],
         model=LLM_MODEL,
         temperature=LLM_TEMP,
-        expect_json=expect_json
+        expect_json=True
     )
 
     # 4) Парсинг результата
-    if expect_json:
-        try:
-            out = json.loads(content)
-        except Exception:
-            out = {"raw": content, "note": "Модель вернула не-JSON. Проверь промпт/response_format."}
-    else:
-        out = {"text": content}
+    try:
+        out = json.loads(content)
+    except Exception:
+        out = {"raw": content, "note": "Модель вернула не-JSON. Проверь промпт/response_format."}
 
     return {
-        "mode": req.mode,
         "query": req.message,
         "rag_used": hits,
         "result": out
