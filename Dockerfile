@@ -28,6 +28,9 @@ ENV PATH="/root/.local/bin/:$PATH"
 # Install dependencies using uv (honor lockfile, no dev deps)
 RUN uv sync --locked --no-dev
 
+# Pre-download embedding model (BAAI/bge-m3) into the image
+RUN uv run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')"
+
 # Copy application source
 COPY src ./src
 
